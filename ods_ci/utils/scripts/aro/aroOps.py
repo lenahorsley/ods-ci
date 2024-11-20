@@ -61,9 +61,9 @@ def execute_terraform(cluster_name, subscription_id, version):
 
 # Get information (api url, console url, cluster version, provisioning state, location) from the cluster
 def get_aro_cluster_info(my_cluster_name):
-    api_server_profile_url = get_cluster_info_field_value(my_cluster_name, "apiserverProfile.url")
-    console_profile_url = get_cluster_info_field_value(my_cluster_name, "consoleProfile.url")
-    cluster_profile_version =  get_cluster_info_field_value(my_cluster_name, "clusterProfile.version")
+    api_server_url = get_cluster_info_field_value(my_cluster_name, "apiserverProfile.url")
+    console_url = get_cluster_info_field_value(my_cluster_name, "consoleProfile.url")
+    cluster_version =  get_cluster_info_field_value(my_cluster_name, "clusterProfile.version")
     provisioning_state = get_cluster_info_field_value(my_cluster_name, "provisioningState")
     cluster_location =  get_cluster_info_field_value(my_cluster_name, "location") 
 
@@ -77,22 +77,25 @@ def get_aro_cluster_info(my_cluster_name):
     print("Cluster name: ", my_cluster_name)
     print("Provisioning status: ", provisioning_state)
     print("Cluster location: ", cluster_location)
-    print("Version: ", cluster_profile_version)
-    print("Console URL: ", console_profile_url)
-    print("API URL: ", api_server_profile_url)
+    print("Version: ", cluster_version)
+    print("Console URL: ", console_url)
+    print("API URL: ", api_server_url)
 
 
 # Log into the ARO cluster
 def aro_cluster_login(my_cluster_name):
     resource_group = my_cluster_name + "-rg"
     print("Obtain cluster credentials...")
-    api_server_profile_url = get_cluster_info_field_value(my_cluster_name, "apiserverProfile.url")
+    api_server_url = get_cluster_info_field_value(my_cluster_name, "apiserverProfile.url")
 
     aro_cluster_pwd = execute_command(f"az aro list-credentials --name {my_cluster_name} --resource-group {resource_group} -o tsv --query kubeadminPassword")
 
     print("Login to the cluster...")
 
-    output = subprocess.getoutput(f"oc login -u kubeadmin -p {aro_cluster_pwd} {api_server_profile_url} --insecure-skip-tls-verify=true 2>&1")
+    cluster_login_command = (f"oc login -u kubeadmin -p {aro_cluster_pwd} {api_server_url} --insecure-skip-tls-verify=true 2>&1")
+    print(cluster_login_command)
+    output = subprocess.getoutput(cluster_login_command)
+
     print(output)
     if "Login successful" in output:
         execute_command("oc get nodes")
