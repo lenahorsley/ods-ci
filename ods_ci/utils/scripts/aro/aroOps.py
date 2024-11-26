@@ -85,6 +85,7 @@ def get_aro_cluster_info(my_cluster_name):
 # Log into the ARO cluster
 def aro_cluster_login(my_cluster_name):
     resource_group = my_cluster_name + "-rg"
+    output = ""
     print("Obtain cluster credentials...")
     api_server_url = get_cluster_info_field_value(my_cluster_name, "apiserverProfile.url")
 
@@ -97,15 +98,15 @@ def aro_cluster_login(my_cluster_name):
     output = subprocess.getoutput(cluster_login_command)
 
     print(output)
-    if "Login successful" in output:
-        execute_command("oc get nodes")
-        execute_command("oc get co; oc get clusterversion")
-    else:
+    if "no such host" in output:
         print("unable to log into cluster")
         print("get the cluster credentials with the command:")
         print("az aro list-credentials --name <cluster name> --resource-group <resource group> -o tsv --query kubeadminPassword")
         sys.exit(1)
-
+    else:
+        execute_command("oc get nodes")
+        execute_command("oc get co; oc get clusterversion")
+        
 
 # Delete the ARO cluster
 def aro_cluster_delete(cluster_name):

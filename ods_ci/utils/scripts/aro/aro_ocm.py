@@ -31,9 +31,13 @@ class AroClusterManager:
     def create_aro_cluster(self):
         aro_path = os.path.dirname(os.path.abspath(__file__))
         os.chdir(aro_path)
+
+        #Clone the repo with the Terraform files
         os.system("git clone https://github.com/lenahorsley/terraform-aro-ods-ci.git")
         terraform_path = os.path.dirname(os.path.abspath(__file__)) + "/terraform-aro-ods-ci"
         os.chdir(terraform_path)
+
+        # Now, create the cluster
         print("Name of cluster to be created", self.aro_cluster_name)
         aro_cli_login(self.aro_client_id, self.aro_tenant_id, self.aro_secret_pwd)
         my_version = get_aro_version(self.aro_ocp_version)
