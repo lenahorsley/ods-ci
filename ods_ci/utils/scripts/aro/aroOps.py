@@ -53,10 +53,11 @@ def aro_cli_login(aro_client_id, aro_tenant_id, aro_secret_pwd):
 
 
 # Execute Terraform to create the cluster
-def execute_terraform(cluster_name, subscription_id, version):
+def execute_terraform(cluster_name, subscription_id, version, location):
     print(">>>>> Here is the cluster name again: ", cluster_name)
     print(">>>>> Here is the version: ", version)
-    execute_command(f"terraform init && terraform plan -out tf.plan -var=subscription_id={subscription_id} -var=cluster_name={cluster_name} -var=aro_version={version} && terraform apply tf.plan")
+    print(">>>>> Here is the location: ", location)
+    execute_command(f"terraform init && terraform plan -out tf.plan -var=subscription_id={subscription_id} -var=cluster_name={cluster_name} -var=aro_version={version}  -var=location={location} && terraform apply tf.plan")
 
 
 # Get information (api url, console url, cluster version, provisioning state, location) from the cluster
@@ -85,7 +86,7 @@ def get_aro_cluster_info(my_cluster_name):
 # Log into the ARO cluster
 def aro_cluster_login(my_cluster_name):
     resource_group = my_cluster_name + "-rg"
-    output = ""
+
     print("Obtain cluster credentials...")
     api_server_url = get_cluster_info_field_value(my_cluster_name, "apiserverProfile.url")
 
@@ -93,19 +94,23 @@ def aro_cluster_login(my_cluster_name):
 
     print("Login to the cluster...")
 
-    cluster_login_command = (f"oc login -u kubeadmin -p {aro_cluster_pwd} {api_server_url} --insecure-skip-tls-verify=true 2>&1")
+    cluster_login_command = (f"oc login -u kubeadmin -p {aro_cluster_pwd} {api_server_url} --insecure-skip-tls-verify=true")
     print(cluster_login_command)
-    output = subprocess.getoutput(cluster_login_command)
+    # output = subprocess.getoutput(cluster_login_command)
+    output = os.system(cluster_login_command)
 
-    print(output)
-    if "no such host" in output:
+    print("return code: ", output)
+    if output != 0:
+    # if "no such host" in output:
         print("unable to log into cluster")
         print("get the cluster credentials with the command:")
         print("az aro list-credentials --name <cluster name> --resource-group <resource group> -o tsv --query kubeadminPassword")
+        # output.flush()
         sys.exit(1)
     else:
         execute_command("oc get nodes")
         execute_command("oc get co; oc get clusterversion")
+        # output.flush()
         
 
 # Delete the ARO cluster

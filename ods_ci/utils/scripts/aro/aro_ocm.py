@@ -26,6 +26,7 @@ class AroClusterManager:
         self.aro_ocp_version = args.get("aro_ocp_version")
         self.aro_cluster_name = args.get("aro_cluster_name")
         self.aro_subscription_id = args.get("aro_subscription_id")
+        self.aro_location = args.get("location")
 
 
     def create_aro_cluster(self):
@@ -43,7 +44,7 @@ class AroClusterManager:
         my_version = get_aro_version(self.aro_ocp_version)
         print("OCP version selected for ARO cluster: ", my_version)
         check_for_existing_cluster(self.aro_cluster_name)
-        execute_terraform(self.aro_cluster_name, self.aro_subscription_id, str(my_version))
+        execute_terraform(self.aro_cluster_name, self.aro_subscription_id, str(my_version), self.aro_location)
         get_aro_cluster_info(self.aro_cluster_name)
         aro_cluster_login(self.aro_cluster_name)
 
@@ -125,6 +126,14 @@ def main():
         action="store",
         dest="aro_ocp_version",
         help="ARO OCP Version",
+    )
+
+    aro_create_cluster_parser.add_argument(
+        "--aro-location",
+        required=True,
+        action="store",
+        dest="aro_location",
+        help="ARO Location",
     )
 
     # aro_delete_cluster_parser arguments/parameters
