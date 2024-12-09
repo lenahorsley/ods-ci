@@ -25,9 +25,9 @@ def get_aro_version(version) -> str | None:
     version_string = version_string.lstrip(' ').replace("\n","").replace(",","")
     version_list = version_string.split()
 
-    for my_string in version_list:
-        if version in my_string:
-            final_list.append(my_string)
+    for verion_string in version_list:
+        if version in version_string:
+            final_list.append(version_string)
 
     if len(final_list) > 0:
         return final_list[-1]
@@ -53,20 +53,22 @@ def aro_cli_login(aro_client_id, aro_tenant_id, aro_secret_pwd):
 
 
 # Execute Terraform to create the cluster
-def execute_terraform(cluster_name, subscription_id, version, location):
+def execute_terraform(cluster_name, subscription_id, version, location, directory_path):
     print(">>>>> Here is the cluster name again: ", cluster_name)
     print(">>>>> Here is the version: ", version)
     print(">>>>> Here is the location: ", location)
-    execute_command(f"terraform init && terraform plan -out tf.plan -var=subscription_id={subscription_id} -var=cluster_name={cluster_name} -var=aro_version={version}  -var=location={location} && terraform apply tf.plan")
+    pull_secret_path = get_pull_secret(directory_path)
+    # execute_command(f"terraform init && terraform plan -out tf.plan -var=subscription_id={subscription_id} -var=cluster_name={cluster_name} -var=aro_version={version}  -var=location={location} && terraform apply tf.plan")
+    execute_command(f"terraform init && terraform plan -out tf.plan -var=subscription_id={subscription_id} -var=cluster_name={cluster_name} -var=aro_version={version} -var=location={location} -var=pull_secret_path={pull_secret_path} && terraform apply tf.plan")
 
 
 # Get information (api url, console url, cluster version, provisioning state, location) from the cluster
-def get_aro_cluster_info(my_cluster_name):
-    api_server_url = get_cluster_info_field_value(my_cluster_name, "apiserverProfile.url")
-    console_url = get_cluster_info_field_value(my_cluster_name, "consoleProfile.url")
-    cluster_version =  get_cluster_info_field_value(my_cluster_name, "clusterProfile.version")
-    provisioning_state = get_cluster_info_field_value(my_cluster_name, "provisioningState")
-    cluster_location =  get_cluster_info_field_value(my_cluster_name, "location") 
+def get_aro_cluster_info(cluster_name):
+    api_server_url = get_cluster_info_field_value(cluster_name, "apiserverProfile.url")
+    console_url = get_cluster_info_field_value(cluster_name, "consoleProfile.url")
+    cluster_version =  get_cluster_info_field_value(cluster_name, "clusterProfile.version")
+    provisioning_state = get_cluster_info_field_value(cluster_name, "provisioningState")
+    cluster_location =  get_cluster_info_field_value(cluster_name, "location") 
 
     if provisioning_state == "Succeeded":
         print("cluster is up and running")
@@ -75,7 +77,7 @@ def get_aro_cluster_info(my_cluster_name):
         print("The cluster is not in a healthy state. Please manually delete all resources from the Azure portal")
         sys.exit(1)
 
-    print("Cluster name: ", my_cluster_name)
+    print("Cluster name: ", cluster_name)
     print("Provisioning status: ", provisioning_state)
     print("Cluster location: ", cluster_location)
     print("Version: ", cluster_version)
@@ -84,33 +86,35 @@ def get_aro_cluster_info(my_cluster_name):
 
 
 # Log into the ARO cluster
-def aro_cluster_login(my_cluster_name):
-    resource_group = my_cluster_name + "-rg"
+def aro_cluster_login(cluster_name, file_path):
+    resource_group = cluster_name + "-rg"
+    output = 0
 
     print("Obtain cluster credentials...")
-    api_server_url = get_cluster_info_field_value(my_cluster_name, "apiserverProfile.url")
+    api_server_url = get_cluster_info_field_value(cluster_name, "apiserverProfile.url")
 
-    aro_cluster_pwd = execute_command(f"az aro list-credentials --name {my_cluster_name} --resource-group {resource_group} -o tsv --query kubeadminPassword")
+    aro_cluster_pwd = execute_command(f"az aro list-credentials --name {cluster_name} --resource-group {resource_group} -o tsv --query kubeadminPassword")
 
     print("Login to the cluster...")
 
-    cluster_login_command = (f"oc login -u kubeadmin -p {aro_cluster_pwd} {api_server_url} --insecure-skip-tls-verify=true")
-    print(cluster_login_command)
-    # output = subprocess.getoutput(cluster_login_command)
-    output = os.system(cluster_login_command)
+    # set KUBECONFIG
+    execute_command(f"az aro get-admin-kubeconfig --name {cluster_name} --resource-group {resource_group}")
+    kubeconfig_path = file_path + "/kubeconfig"
+    print("kubeconfig_path: ", kubeconfig_path)
+    os.environ["KUBECONFIG"] = kubeconfig_path
+    
+    cluster_login_command = (f"oc login {api_server_url} -u kubeadmin -p {aro_cluster_pwd} -insecure-skip-tls-verify=true --yes")
+    output = execute_command(cluster_login_command)
 
-    print("return code: ", output)
-    if output != 0:
-    # if "no such host" in output:
-        print("unable to log into cluster")
-        print("get the cluster credentials with the command:")
-        print("az aro list-credentials --name <cluster name> --resource-group <resource group> -o tsv --query kubeadminPassword")
-        # output.flush()
-        sys.exit(1)
-    else:
+    print(output)
+    if "Login successful." in output:
         execute_command("oc get nodes")
         execute_command("oc get co; oc get clusterversion")
-        # output.flush()
+    else:
+        log.error("unable to log into cluster")
+        log.error("get the cluster credentials with the command:")
+        log.error("az aro list-credentials --name <cluster name> --resource-group <resource group> -o tsv --query kubeadminPassword")
+        sys.exit(1)
         
 
 # Delete the ARO cluster
@@ -131,7 +135,7 @@ def aro_cluster_delete(cluster_name):
         if "ERROR: (ResourceNotFound)" in delete_provisioning_state:
             print("Cluster has been successfully deleted")
         elif time_count >= 3600:
-            print("Time exceeded for cluster deletion. Please delete the cluster manually")
+            log.error("Time exceeded for cluster deletion. Please delete the cluster manually")
             sys.exit(1)
 
     else:
@@ -140,13 +144,13 @@ def aro_cluster_delete(cluster_name):
 
 
  # Get the value of a field from the cluster info json   
-def get_cluster_info_field_value(my_cluster_name, cluster_info_field):
-    resource_group = my_cluster_name + "-rg"
+def get_cluster_info_field_value(cluster_name, cluster_info_field):
+    resource_group = cluster_name + "-rg"
 
-    my_command_output = execute_command(f"az aro show --name {my_cluster_name} --resource-group {resource_group} | jq '.{cluster_info_field}'")
-    my_command_output = re.sub("[\"\']", "", my_command_output)
+    command_output = execute_command(f"az aro show --name {cluster_name} --resource-group {resource_group} | jq '.{cluster_info_field}'")
+    command_output = re.sub("[\"\']", "", command_output)
 
-    return my_command_output.strip()
+    return command_output.strip()
 
 
 # Check for an existing cluster with the same name
@@ -157,5 +161,15 @@ def check_for_existing_cluster(cluster_name):
         print(f"cluster does not exist. Proceeding with provisioning cluster {cluster_name}")
         return None
     else:
-        print(f"ERROR: cluster {cluster_name} exists.")
+        log.error(f"ERROR: cluster {cluster_name} exists.")
         sys.exit(1)
+
+
+def get_pull_secret(directory_path):
+    pull_secret_name = "pull-secret.txt"
+    pull_secret_path=""
+    for root, dirs, files in os.walk(directory_path):
+        if pull_secret_name in files:
+            print(os.path.join(root, pull_secret_name))
+            pull_secret_path = os.path.join(root, pull_secret_name)
+    return pull_secret_path
