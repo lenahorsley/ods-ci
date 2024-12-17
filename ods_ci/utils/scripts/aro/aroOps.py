@@ -25,7 +25,7 @@ def get_aro_version(version) -> str | None:
     version_string = version_string.lstrip(' ').replace("\n","").replace(",","")
     version_list = version_string.split()
 
-    for verion_string in version_list:
+    for version_string in version_list:
         if version in version_string:
             final_list.append(version_string)
 
@@ -58,7 +58,6 @@ def execute_terraform(cluster_name, subscription_id, version, location, director
     print(">>>>> Here is the version: ", version)
     print(">>>>> Here is the location: ", location)
     pull_secret_path = get_pull_secret(directory_path)
-    # execute_command(f"terraform init && terraform plan -out tf.plan -var=subscription_id={subscription_id} -var=cluster_name={cluster_name} -var=aro_version={version}  -var=location={location} && terraform apply tf.plan")
     execute_command(f"terraform init && terraform plan -out tf.plan -var=subscription_id={subscription_id} -var=cluster_name={cluster_name} -var=aro_version={version} -var=location={location} -var=pull_secret_path={pull_secret_path} && terraform apply tf.plan")
 
 
@@ -86,7 +85,7 @@ def get_aro_cluster_info(cluster_name):
 
 
 # Log into the ARO cluster
-def aro_cluster_login(cluster_name, file_path):
+def aro_cluster_login(cluster_name, file_path, subscription_id):
     resource_group = cluster_name + "-rg"
     output = 0
 
@@ -98,12 +97,14 @@ def aro_cluster_login(cluster_name, file_path):
     print("Login to the cluster...")
 
     # set KUBECONFIG
-    execute_command(f"az aro get-admin-kubeconfig --name {cluster_name} --resource-group {resource_group}")
+    print("Setting the KUBECONFIG...")
+    execute_command(f"az aro get-admin-kubeconfig --subscription {subscription_id} --name {cluster_name} --resource-group {resource_group}")
+    # execute_command(f"az aro get-admin-kubeconfig --name {cluster_name} --resource-group {resource_group}")
     kubeconfig_path = file_path + "/kubeconfig"
-    print("kubeconfig_path: ", kubeconfig_path)
+    print("KUBECONFIG: ", kubeconfig_path)
     os.environ["KUBECONFIG"] = kubeconfig_path
     
-    cluster_login_command = (f"oc login {api_server_url} -u kubeadmin -p {aro_cluster_pwd} -insecure-skip-tls-verify=true --yes")
+    cluster_login_command = (f"oc login {api_server_url} -u kubeadmin -p {aro_cluster_pwd} --insecure-skip-tls-verify=true --kubeconfig={kubeconfig_path}")
     output = execute_command(cluster_login_command)
 
     print(output)
@@ -115,7 +116,7 @@ def aro_cluster_login(cluster_name, file_path):
         log.error("get the cluster credentials with the command:")
         log.error("az aro list-credentials --name <cluster name> --resource-group <resource group> -o tsv --query kubeadminPassword")
         sys.exit(1)
-        
+
 
 # Delete the ARO cluster
 def aro_cluster_delete(cluster_name):
@@ -170,6 +171,6 @@ def get_pull_secret(directory_path):
     pull_secret_path=""
     for root, dirs, files in os.walk(directory_path):
         if pull_secret_name in files:
-            print(os.path.join(root, pull_secret_name))
+            # print(os.path.join(root, pull_secret_name))
             pull_secret_path = os.path.join(root, pull_secret_name)
     return pull_secret_path

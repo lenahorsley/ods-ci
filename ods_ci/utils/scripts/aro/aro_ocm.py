@@ -48,7 +48,7 @@ class AroClusterManager:
         check_for_existing_cluster(self.aro_cluster_name)
         execute_terraform(self.aro_cluster_name, self.aro_subscription_id, str(my_version), self.aro_location, self.aro_pull_secret_path)
         get_aro_cluster_info(self.aro_cluster_name)
-        aro_cluster_login(self.aro_cluster_name, terraform_path)
+        aro_cluster_login(self.aro_cluster_name, terraform_path, self.aro_subscription_id)
 
     def delete_aro_cluster(self):
         print("Name of cluster to be deleted", self.aro_cluster_name)
